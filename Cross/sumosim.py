@@ -6,6 +6,7 @@ import os
 import random
 import sys
 import numpy as np
+import matplotlib.pyplot as plt
 
 # check up the environment, import python modules from $SUMO_HOME/tools directory
 if 'SUMO_HOME' in os.environ:
@@ -40,9 +41,10 @@ class SumoSim():
             os.makedirs(log_out)
 
         self.phases_file = os.path.join(log_out, 'phases.log')
+        self.queue_file = os.path.join(log_out, 'queue.log')
 
-        self.road_length = 500
-        self.margin = 14
+        self.road_length = 200
+        # self.margin = 14
         self.max_green_time = 30
         self.min_green_time = 14
         self.interval_time = 2
@@ -106,19 +108,35 @@ class SumoSim():
 
     def run(self):
         step = 0
-    # we start with phase 2 where EW has green
+        n_road = 4
+        n_lane = 3
+        Queue_Length = np.zeros((n_road,n_lane,1))
+        # we start with phase 2 where EW has green
         traci.trafficlight.setPhase("0", 2)
         while traci.simulation.getMinExpectedNumber() > 0:
             traci.simulationStep()
-            # if traci.trafficlight.getPhase("0") == 2:
-            #     # we are not already switching
-            #     if traci.inductionloop.getLastStepVehicleNumber("0") > 0:
-            #         # there is a vehicle from the north, switch
-            #         traci.trafficlight.setPhase("0", 3)
-            #     else:
-            #         # otherwise try to keep green for EW
-            #         traci.trafficlight.setPhase("0", 2)
             step += 1
+            cx_res = traci.junction.getContextSubscriptionResults("0")
+            # print(cx_res)
+            if not cx_res:
+                continue
+            ql_step = np.zeros((n_road,n_lane,1))
+            for vid, mes in cx_res.items():
+                if mes[tc.VAR_LANE_ID].__contains__('i'):
+                    rid,lid=[int(x) for x in mes[tc.VAR_LANE_ID].split('si_')]
+                    if mes[tc.VAR_SPEED] < 1:
+                        ql_step[rid-1,lid,0]+=1
+            Queue_Length = np.concatenate((Queue_Length,ql_step),axis=2)
+        # with open(self.queue_file,'w') as queue_file:
+        #     for road,lane,step in 
+        #      queue_file.write()
+        X=np.arange(0,Queue_Length.shape[2],1)
+        plt.figure(1)
+        for i in range(n_road):
+            for j in range(n_lane):
+                plt.subplot(4, 3, 3*i+j+1)
+                plt.plot(X,Queue_Length[i,j,:])
+        plt.show()
         traci.close()
         sys.stdout.flush()
 

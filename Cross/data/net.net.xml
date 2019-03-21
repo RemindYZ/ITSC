@@ -158,8 +158,8 @@
         <lane id="4si_1" index="1" speed="13.89" length="237.15" shape="495.05,748.50 495.05,511.35"/>
         <lane id="4si_2" index="2" speed="13.89" length="237.15" shape="498.35,748.50 498.35,511.35"/>
     </edge>
-<!-- 
-    <tlLogic id="0" type="static" programID="0" offset="0">
+
+    <!-- <tlLogic id="0" type="static" programID="0" offset="0">
         <phase duration="26" state="GGGrrrrrGGGrrrrr"/>
         <phase duration="3" state="yyyrrrrryyyrrrrr"/>
         <phase duration="13" state="rrrGrrrrrrrGrrrr"/>
