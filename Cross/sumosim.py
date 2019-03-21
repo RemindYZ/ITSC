@@ -28,20 +28,20 @@ class SumoSim():
 
         if nogui:
             self.sumoBinary = checkBinary('sumo')
-            self.cmd_lines = [self.sumoBinary, "--start", "-c", self.cfg_file]
+            self.cmd_lines = [self.sumoBinary, "--start", "-c", self.cfg_file,"--tripinfo-output", "tripinfo.xml"]
             self.load_cmd = ["--start", "-c", self.cfg_file]
         else:
             self.sumoBinary = checkBinary('sumo-gui')
             # --start, --quit-on-end
-            self.cmd_lines = [self.sumoBinary, "-c", self.cfg_file]
+            self.cmd_lines = [self.sumoBinary, "-c", self.cfg_file,"--tripinfo-output", "tripinfo.xml"]
             self.load_cmd = ["-c", self.cfg_file]
         
         self.log_out = log_out
         if not os.path.exists(log_out):
             os.makedirs(log_out)
 
-        self.phases_file = os.path.join(log_out, 'phases.log')
-        self.queue_file = os.path.join(log_out, 'queue.log')
+        self.phases_file = os.path.join(log_out, 'phases.npy')
+        self.queue_file = os.path.join(log_out, 'queue.npy')
 
         self.road_length = 200
         # self.margin = 14
@@ -111,14 +111,18 @@ class SumoSim():
         n_road = 4
         n_lane = 3
         Queue_Length = np.zeros((n_road,n_lane,1))
+        Phase = [2]
         # we start with phase 2 where EW has green
         traci.trafficlight.setPhase("0", 2)
         while traci.simulation.getMinExpectedNumber() > 0:
             traci.simulationStep()
             step += 1
+            Phase.append(traci.trafficlight.getPhase('0'))
             cx_res = traci.junction.getContextSubscriptionResults("0")
             # print(cx_res)
             if not cx_res:
+                ql_step = np.zeros((n_road,n_lane,1))
+                Queue_Length = np.concatenate((Queue_Length,ql_step),axis=2)
                 continue
             ql_step = np.zeros((n_road,n_lane,1))
             for vid, mes in cx_res.items():
@@ -127,9 +131,10 @@ class SumoSim():
                     if mes[tc.VAR_SPEED] < 1:
                         ql_step[rid-1,lid,0]+=1
             Queue_Length = np.concatenate((Queue_Length,ql_step),axis=2)
-        # with open(self.queue_file,'w') as queue_file:
-        #     for road,lane,step in 
-        #      queue_file.write()
+        
+        np.save(self.queue_file, Queue_Length)
+        np.save(self.phases_file, Phase)
+
         X=np.arange(0,Queue_Length.shape[2],1)
         plt.figure(1)
         for i in range(n_road):
