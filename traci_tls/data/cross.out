@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- generated on 2019.3.16 17:35:46 by SUMO gui Version 0.32.0
+<?xml version="1.0" encoding="UTF-8"?>
+
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
+
+    <input>
+        <net-file value="C:\Users\Remind\Documents\Master\Master_Year_2019\ITSC\Experiment\traci_tls\data\cross.net.xml"/>
+        <route-files value="C:\Users\Remind\Documents\Master\Master_Year_2019\ITSC\Experiment\traci_tls\data\cross.rou.xml"/>
+        <additional-files value="C:\Users\Remind\Documents\Master\Master_Year_2019\ITSC\Experiment\traci_tls\data\cross.det.xml"/>
+    </input>
+
+    <time>
+        <begin value="0"/>
+    </time>
+
+    <report>
+        <verbose value="true"/>
+        <no-step-log value="true"/>
+    </report>
+
+</configuration>
+-->
+
+<detector xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/det_e1_file.xsd">
+</detector>
