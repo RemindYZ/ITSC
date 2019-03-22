@@ -23,9 +23,16 @@ import traci.constants as tc
 
 class SumoSim():
     def __init__(self, cfg_file, route_file, nogui=False, log_out="log"):
+        self.pns, self.pew, self.psn, self.pwe, self.plt, self.prt = 0.125,0.25,0.125,0.25,0.25,0.25
+        self.p_lane = [
+            [self.pwe*(1+self.prt)/2,self.pwe*(1+self.prt)/2,self.pwe*self.plt],
+            [self.pew*(1+self.prt)/2,self.pew*(1+self.prt)/2,self.pew*self.plt],
+            [self.psn*(1+self.prt)/2,self.psn*(1+self.prt)/2,self.psn*self.plt],
+            [self.pns*(1+self.prt)/2,self.pns*(1+self.prt)/2,self.pns*self.plt]
+        ]
         self.cfg_file = cfg_file
         self.route_file = route_file
-        self.generate_route_file()
+        self.generate_route_file(self.pns, self.pew, self.psn, self.pew, self.plt, self.prt)
 
         if nogui:
             self.sumoBinary = checkBinary('sumo')
@@ -54,6 +61,8 @@ class SumoSim():
         self.alpha = [0.4,0.3,0.2,0.1]
         self.phase2road_lane_index = {0:[[3,4],[0,1]],2:[[3,4],[2]],4:[[1,2],[0,1]],6:[[1,2],[2]]}
         self.interval_time = 6
+        self.sat_flow_rate = 1600
+        self.threshod_speed = 1
         # self.max_sim_time = 360000000
         
         traci.start(self.cmd_lines)
@@ -63,7 +72,7 @@ class SumoSim():
                                          tc.VAR_WAITING_TIME, tc.VAR_LANEPOSITION,
                                          tc.VAR_SPEED, tc.VAR_ACCELERATION])
     
-    def generate_route_file(self, pns=1.0/8.0, pew=1.0/4.0, psn=1.0/8.0, pwe=1.0/4.0, plt=1.0/4.0, prt=1.0/4.0):
+    def generate_route_file(self, pns, pew, psn, pwe, plt, prt):
         self.seed(40)
         num_time_step = 3600  # number of time steps
         routes = [{'route': 'n2s', 'prob': pns},
@@ -121,9 +130,18 @@ class SumoSim():
         while traci.simulation.getMinExpectedNumber() > 0:
             traci.simulationStep()
             step += 1
-            Phase.append(traci.trafficlight.getPhase('0'))
+            current_phase = traci.trafficlight.getPhase('0')
+            Phase.append(current_phase)
             cx_res = traci.junction.getContextSubscriptionResults("0")
-            print(cx_res)
+
+            Message = self.get_message(cx_res)
+            Reward = self.get_reward(Message, current_phase)
+            Bool =self.get_action(Reward, current_phase)
+
+            if Bool:
+                traci.trafficlight.setPhase("0",(current_phase+1)%8)
+
+            # print(cx_res)
             if not cx_res:
                 ql_step = np.zeros((self.n_road,self.n_lane,1))
                 Queue_Length = np.concatenate((Queue_Length,ql_step),axis=2)
@@ -132,12 +150,12 @@ class SumoSim():
             for vid, mes in cx_res.items():
                 if mes[tc.VAR_LANE_ID].__contains__('i'):
                     rid,lid=[int(x) for x in mes[tc.VAR_LANE_ID].split('si_')]
-                    if mes[tc.VAR_SPEED] < 1:
+                    if mes[tc.VAR_SPEED] < self.threshod_speed:
                         ql_step[rid-1,lid,0]+=1
-            Queue_Length = np.concatenate((Queue_Length,ql_step),axis=2)
+            Queue_Length = np.concatenate((Queue_Length,ql_step),axis=2)            
         
-        # np.save(self.queue_file, Queue_Length)
-        # np.save(self.phases_file, Phase)
+        np.save(self.queue_file, Queue_Length)
+        np.save(self.phases_file, Phase)
 
         X=np.arange(0,Queue_Length.shape[2],1)
         plt.figure(1)
@@ -158,26 +176,79 @@ class SumoSim():
             for vid, mes in cx_res.items():
                 if mes[tc.VAR_LANE_ID].__contains__('i'):
                     rid,lid=[int(x) for x in mes[tc.VAR_LANE_ID].split('si_')]
-                    message[rid-1][lid].append([mes[tc.VAR_LANEPOSITION],mes[tc.VAR_SPEED],mes[tc.VAR_ACCELERATION]])
-                    if mes[tc.VAR_SPEED] < 1:
+                    message[rid-1][lid].append([self.road_length-mes[tc.VAR_LANEPOSITION],mes[tc.VAR_SPEED],mes[tc.VAR_ACCELERATION]])
+                    if mes[tc.VAR_SPEED] < self.threshod_speed:
                         ql_step[rid-1,lid,0]+=1
             for i in range(self.n_road):
                 for j in range(self.n_lane):
-                    message[i][j].sort(key=lambda x:self.road_length-x[0])
+                    message[i][j].sort(key=lambda x:x[0])
             return [ql_step, message]
     
-    # def get_reward(self, Message, current_phase):
-    #     if current_phase%2!=0: 
-    #     # yellow phase
-    #         return None
-    #     else:
-    #         ql_step, message = Message
-    #         Reward = np.zeros((self.n_road,self.n_lane,2))
-    #         for i in self.n_road:
-    #             for j in self.n_lane:
+    def get_reward(self, Message, current_phase):
+        if current_phase%2!=0 or not Message[1]: 
+        # yellow phase
+            return None
+        else:
+            ql_step, message = Message
+            Reward = np.zeros((self.n_road,self.n_lane,2))
+            arrival = np.zeros((self.n_road,self.n_lane,1))
+            for r in range(self.n_road):
+                for l in range(self.n_lane):
+                    for m in message[r-1][l]:
+                        if m[0]<=100 and m[1]+m[2]*self.interval_time < self.threshod_speed:
+                            arrival[r-1,l,0] += 1
+            rid,lid = self.phase2road_lane_index[current_phase]
+            out = np.zeros((self.n_road,self.n_lane,1))
+            for r in rid:
+                for l in lid:
+                    for m in message[r-1][l]:
+                        if m[1]*self.interval_time+m[2]/2*(self.interval_time**2)>m[0]:
+                            out[r-1,l,0] += 1
+            Reward[:,:,0] = ql_step + arrival - out
 
-    #         rid,lid = self.phase2road_lane_index[current_phase]
-    #         return None
+            next_phase = lambda x:x+2 if x < 6 else x-6
+            nrid,nlid=self.phase2road_lane_index[next_phase(current_phase)]
+            out = np.zeros((self.n_road,self.n_lane,1))
+            for r in nrid:
+                for l in nlid:
+                    for m in message[r-1][l]:
+                        if m[0]<2.6/2*((self.interval_time-3)**2):
+                            out[r-1,l,0] += 1
+            Reward[:,:,1] = ql_step + arrival - out
+            return Reward
+        
+    def get_action(self, Reward, current_phase):
+        # true:swith;false:keep
+        if (not Reward) or (current_phase%2!=0):
+            return False
+        else:
+            reward_keep, reward_switch = self.max_reward(Reward)
+            keep,switch=0,0
+            if current_phase == 0:
+                keep = self.alpha[0]*reward_keep[0]+self.alpha[1]*reward_keep[1]+self.alpha[2]*reward_keep[2]+self.alpha[3]*reward_keep[3]
+                switch = self.alpha[0]*reward_switch[0]+self.alpha[1]*reward_switch[1]+self.alpha[2]*reward_switch[2]+self.alpha[3]*reward_switch[3]
+            elif current_phase == 2:
+                keep = self.alpha[0]*reward_keep[1]+self.alpha[1]*reward_keep[2]+self.alpha[2]*reward_keep[3]+self.alpha[3]*reward_keep[0]
+                switch = self.alpha[0]*reward_switch[1]+self.alpha[1]*reward_switch[2]+self.alpha[2]*reward_switch[3]+self.alpha[3]*reward_switch[0]
+            elif current_phase == 4:
+                keep = self.alpha[0]*reward_keep[2]+self.alpha[1]*reward_keep[3]+self.alpha[2]*reward_keep[0]+self.alpha[3]*reward_keep[1]
+                switch = self.alpha[0]*reward_switch[2]+self.alpha[1]*reward_switch[3]+self.alpha[2]*reward_switch[0]+self.alpha[3]*reward_switch[1]
+            else:
+                keep = self.alpha[0]*reward_keep[3]+self.alpha[1]*reward_keep[0]+self.alpha[2]*reward_keep[1]+self.alpha[3]*reward_keep[2]
+                switch = self.alpha[0]*reward_switch[3]+self.alpha[1]*reward_switch[0]+self.alpha[2]*reward_switch[1]+self.alpha[3]*reward_switch[2]
+            if keep > switch:
+                return False
+            else:
+                return True
+
+    def max_reward(self, Reward):
+        reward_keep = [max(np.max(Reward[2:,0:2,0]),0),max(np.max(Reward[2:,2,0]),0),
+                max(np.max(Reward[0:2,0:2,0]),0),max(np.max(Reward[0:2,2,0]),0)
+                ]
+        reward_switch = [max(np.max(Reward[2:,0:2,1]),0),max(np.max(Reward[2:,2,1]),0),
+                max(np.max(Reward[0:2,0:2,1]),0),max(np.max(Reward[0:2,2,1]),0)
+                ]
+        return reward_keep,reward_switch
 
 
 
