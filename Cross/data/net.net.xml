@@ -159,7 +159,7 @@
         <lane id="4si_2" index="2" speed="13.89" length="237.15" shape="498.35,748.50 498.35,511.35"/>
     </edge>
 
-    <tlLogic id="0" type="static" programID="0" offset="0">
+    <!-- <tlLogic id="0" type="static" programID="0" offset="0">
         <phase duration="13" state="GGGrrrrrGGGrrrrr"/>
         <phase duration="3" state="yyyrrrrryyyrrrrr"/>
         <phase duration="6" state="rrrGrrrrrrrGrrrr"/>
@@ -168,7 +168,7 @@
         <phase duration="3" state="rrrryyyrrrrryyyr"/>
         <phase duration="11" state="rrrrrrrGrrrrrrrG"/>
         <phase duration="3" state="rrrrrrryrrrrrrry"/>
-    </tlLogic>
+    </tlLogic> -->
 
     <!-- <tlLogic id="0" programID="my_program" offset="0" type="actuated">
         <param key="max-gap" value="3.0"/>
@@ -186,6 +186,17 @@
         <phase duration="31" minDur="5" maxDur="20" state="rrrrrrrGrrrrrrrG"/>
         <phase duration="3" state="rrrrrrryrrrrrrry"/>
     </tlLogic> -->
+
+    <tlLogic id="0" type="static" programID="0" offset="0">
+        <phase duration="3" state="GGGrrrrrGGGrrrrr"/>
+        <phase duration="3" state="yyyrrrrryyyrrrrr"/>
+        <phase duration="3" state="rrrGrrrrrrrGrrrr"/>
+        <phase duration="3" state="rrryrrrrrrryrrrr"/>
+        <phase duration="3" state="rrrrGGGrrrrrGGGr"/>
+        <phase duration="3" state="rrrryyyrrrrryyyr"/>
+        <phase duration="3" state="rrrrrrrGrrrrrrrG"/>
+        <phase duration="3" state="rrrrrrryrrrrrrry"/>
+    </tlLogic>
 
     <junction id="0" type="traffic_light" x="500.00" y="500.00" incLanes="4si_0 4si_1 4si_2 2si_0 2si_1 2si_2 3si_0 3si_1 3si_2 1si_0 1si_1 1si_2" intLanes=":0_0_0 :0_1_0 :0_1_1 :0_16_0 :0_4_0 :0_5_0 :0_5_1 :0_17_0 :0_8_0 :0_9_0 :0_9_1 :0_18_0 :0_12_0 :0_13_0 :0_13_1 :0_19_0" shape="490.15,511.35 509.85,511.35 511.35,509.85 511.35,490.15 509.85,488.65 490.15,488.65 488.65,490.15 488.65,509.85">
         <request index="0" response="0000000000000000" foes="0000100001100000" cont="0"/>

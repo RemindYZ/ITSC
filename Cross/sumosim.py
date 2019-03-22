@@ -20,6 +20,7 @@ from sumolib import checkBinary
 import traci
 import traci.constants as tc
 
+
 class SumoSim():
     def __init__(self, cfg_file, route_file, nogui=False, log_out="log"):
         self.cfg_file = cfg_file
@@ -43,19 +44,24 @@ class SumoSim():
         self.phases_file = os.path.join(log_out, 'phases.npy')
         self.queue_file = os.path.join(log_out, 'queue.npy')
 
-        self.road_length = 200
+        self.detect_length = 200
+        self.road_length = 250
+        self.n_road = 4
+        self.n_lane = 3
         # self.margin = 14
-        self.max_green_time = 30
-        self.min_green_time = 14
-        self.interval_time = 2
-        self.max_sim_time = 360000000
+        self.max_green_time = [20,15,35,20]
+        self.min_green_time = 3
+        self.alpha = [0.4,0.3,0.2,0.1]
+        self.phase2road_lane_index = {0:[[3,4],[0,1]],2:[[3,4],[2]],4:[[1,2],[0,1]],6:[[1,2],[2]]}
+        self.interval_time = 6
+        # self.max_sim_time = 360000000
         
         traci.start(self.cmd_lines)
         # context subscriptions, subscribe vehicles near the intersection
-        traci.junction.subscribeContext("0", tc.CMD_GET_VEHICLE_VARIABLE, self.road_length,
+        traci.junction.subscribeContext("0", tc.CMD_GET_VEHICLE_VARIABLE, self.detect_length,
                                         [tc.VAR_LANE_ID, tc.VAR_ROAD_ID,
                                          tc.VAR_WAITING_TIME, tc.VAR_LANEPOSITION,
-                                         tc.VAR_SPEED])
+                                         tc.VAR_SPEED, tc.VAR_ACCELERATION])
     
     def generate_route_file(self, pns=1.0/8.0, pew=1.0/4.0, psn=1.0/8.0, pwe=1.0/4.0, plt=1.0/4.0, prt=1.0/4.0):
         self.seed(40)
@@ -108,9 +114,7 @@ class SumoSim():
 
     def run(self):
         step = 0
-        n_road = 4
-        n_lane = 3
-        Queue_Length = np.zeros((n_road,n_lane,1))
+        Queue_Length = np.zeros((self.n_road,self.n_lane,1))
         Phase = [2]
         # we start with phase 2 where EW has green
         traci.trafficlight.setPhase("0", 2)
@@ -119,12 +123,12 @@ class SumoSim():
             step += 1
             Phase.append(traci.trafficlight.getPhase('0'))
             cx_res = traci.junction.getContextSubscriptionResults("0")
-            # print(cx_res)
+            print(cx_res)
             if not cx_res:
-                ql_step = np.zeros((n_road,n_lane,1))
+                ql_step = np.zeros((self.n_road,self.n_lane,1))
                 Queue_Length = np.concatenate((Queue_Length,ql_step),axis=2)
                 continue
-            ql_step = np.zeros((n_road,n_lane,1))
+            ql_step = np.zeros((self.n_road,self.n_lane,1))
             for vid, mes in cx_res.items():
                 if mes[tc.VAR_LANE_ID].__contains__('i'):
                     rid,lid=[int(x) for x in mes[tc.VAR_LANE_ID].split('si_')]
@@ -132,18 +136,51 @@ class SumoSim():
                         ql_step[rid-1,lid,0]+=1
             Queue_Length = np.concatenate((Queue_Length,ql_step),axis=2)
         
-        np.save(self.queue_file, Queue_Length)
-        np.save(self.phases_file, Phase)
+        # np.save(self.queue_file, Queue_Length)
+        # np.save(self.phases_file, Phase)
 
         X=np.arange(0,Queue_Length.shape[2],1)
         plt.figure(1)
-        for i in range(n_road):
-            for j in range(n_lane):
+        for i in range(self.n_road):
+            for j in range(self.n_lane):
                 plt.subplot(4, 3, 3*i+j+1)
                 plt.plot(X,Queue_Length[i,j,:])
         plt.show()
         traci.close()
         sys.stdout.flush()
+    
+    def get_message(self, cx_res):
+        if not cx_res:
+            return [np.zeros((self.n_road,self.n_lane,1)), None]
+        else:
+            message = [[[],[],[]],[[],[],[]],[[],[],[]],[[],[],[]]]
+            ql_step = np.zeros((self.n_road,self.n_lane,1))
+            for vid, mes in cx_res.items():
+                if mes[tc.VAR_LANE_ID].__contains__('i'):
+                    rid,lid=[int(x) for x in mes[tc.VAR_LANE_ID].split('si_')]
+                    message[rid-1][lid].append([mes[tc.VAR_LANEPOSITION],mes[tc.VAR_SPEED],mes[tc.VAR_ACCELERATION]])
+                    if mes[tc.VAR_SPEED] < 1:
+                        ql_step[rid-1,lid,0]+=1
+            for i in range(self.n_road):
+                for j in range(self.n_lane):
+                    message[i][j].sort(key=lambda x:self.road_length-x[0])
+            return [ql_step, message]
+    
+    # def get_reward(self, Message, current_phase):
+    #     if current_phase%2!=0: 
+    #     # yellow phase
+    #         return None
+    #     else:
+    #         ql_step, message = Message
+    #         Reward = np.zeros((self.n_road,self.n_lane,2))
+    #         for i in self.n_road:
+    #             for j in self.n_lane:
+
+    #         rid,lid = self.phase2road_lane_index[current_phase]
+    #         return None
+
+
+
 
 if __name__=="__main__":
     Sim=SumoSim("data/net.sumocfg","data/net.rou.xml")
