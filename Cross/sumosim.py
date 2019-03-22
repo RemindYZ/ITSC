@@ -57,10 +57,10 @@ class SumoSim():
         self.n_lane = 3
         # self.margin = 14
         self.max_green_time = [20,15,35,20]
-        self.min_green_time = 3
-        self.alpha = [0.4,0.3,0.2,0.1]
+        self.min_green_time = [10,6,22,11]
+        self.alpha = [0.6,0.25,0.1,0.05]
         self.phase2road_lane_index = {0:[[3,4],[0,1]],2:[[3,4],[2]],4:[[1,2],[0,1]],6:[[1,2],[2]]}
-        self.interval_time = 6
+        self.interval_time = 20
         self.sat_flow_rate = 1600
         self.threshod_speed = 1
         # self.max_sim_time = 360000000
@@ -123,6 +123,7 @@ class SumoSim():
 
     def run(self):
         step = 0
+        last_step = 0
         Queue_Length = np.zeros((self.n_road,self.n_lane,1))
         Phase = [2]
         # we start with phase 2 where EW has green
@@ -133,13 +134,22 @@ class SumoSim():
             current_phase = traci.trafficlight.getPhase('0')
             Phase.append(current_phase)
             cx_res = traci.junction.getContextSubscriptionResults("0")
+            # print("current:",current_phase)
+            if step>=last_step and current_phase%2==0:
+                Message = self.get_message(cx_res)
+                Reward = self.get_reward(Message, current_phase)
+                Bool =self.get_action(Reward, current_phase)
 
-            Message = self.get_message(cx_res)
-            Reward = self.get_reward(Message, current_phase)
-            Bool =self.get_action(Reward, current_phase)
-
-            if Bool:
-                traci.trafficlight.setPhase("0",(current_phase+1)%8)
+                if Bool and step-last_step-3>=self.min_green_time[int(current_phase/2)]:
+                    print(current_phase,"total time:",step-last_step-3)
+                    traci.trafficlight.setPhase("0",(current_phase+1)%8)
+                    last_step=step
+                elif step-last_step>=self.max_green_time[int(current_phase/2)]:
+                    print(current_phase, "total time:",step-last_step-3)
+                    traci.trafficlight.setPhase("0",(current_phase+1)%8)
+                    last_step=step
+                else:
+                    traci.trafficlight.setPhase("0",current_phase)
 
             # print(cx_res)
             if not cx_res:
@@ -191,52 +201,55 @@ class SumoSim():
         else:
             ql_step, message = Message
             Reward = np.zeros((self.n_road,self.n_lane,2))
-            arrival = np.zeros((self.n_road,self.n_lane,1))
+            arrival = np.zeros((self.n_road,self.n_lane))
             for r in range(self.n_road):
                 for l in range(self.n_lane):
                     for m in message[r-1][l]:
-                        if m[0]<=100 and m[1]+m[2]*self.interval_time < self.threshod_speed:
-                            arrival[r-1,l,0] += 1
+                        if m[0]<=200 and m[1] > self.threshod_speed and m[1]+m[2]*self.interval_time < self.threshod_speed:
+                            arrival[r-1,l] += 1
             rid,lid = self.phase2road_lane_index[current_phase]
-            out = np.zeros((self.n_road,self.n_lane,1))
+            out = np.zeros((self.n_road,self.n_lane))
             for r in rid:
                 for l in lid:
                     for m in message[r-1][l]:
                         if m[1]*self.interval_time+m[2]/2*(self.interval_time**2)>m[0]:
-                            out[r-1,l,0] += 1
-            Reward[:,:,0] = ql_step + arrival - out
+                            out[r-1,l] += 1
+            Reward[:,:,0] = ql_step[:,:,0] + arrival - out
 
             next_phase = lambda x:x+2 if x < 6 else x-6
             nrid,nlid=self.phase2road_lane_index[next_phase(current_phase)]
-            out = np.zeros((self.n_road,self.n_lane,1))
+            out = np.zeros((self.n_road,self.n_lane))
             for r in nrid:
                 for l in nlid:
                     for m in message[r-1][l]:
                         if m[0]<2.6/2*((self.interval_time-3)**2):
-                            out[r-1,l,0] += 1
-            Reward[:,:,1] = ql_step + arrival - out
+                            out[r-1,l] += 1
+            Reward[:,:,1] = ql_step[:,:,0] + arrival - out
             return Reward
         
     def get_action(self, Reward, current_phase):
         # true:swith;false:keep
-        if (not Reward) or (current_phase%2!=0):
+        if Reward is None or current_phase%2!=0:
             return False
         else:
             reward_keep, reward_switch = self.max_reward(Reward)
             keep,switch=0,0
             if current_phase == 0:
-                keep = self.alpha[0]*reward_keep[0]+self.alpha[1]*reward_keep[1]+self.alpha[2]*reward_keep[2]+self.alpha[3]*reward_keep[3]
-                switch = self.alpha[0]*reward_switch[0]+self.alpha[1]*reward_switch[1]+self.alpha[2]*reward_switch[2]+self.alpha[3]*reward_switch[3]
+                keep = [self.alpha[0]*reward_keep[0],self.alpha[1]*reward_keep[1]+self.alpha[2]*reward_keep[2]+self.alpha[3]*reward_keep[3]]
+                switch = [self.alpha[0]*reward_switch[0],self.alpha[1]*reward_switch[1]+self.alpha[2]*reward_switch[2]+self.alpha[3]*reward_switch[3]]
             elif current_phase == 2:
-                keep = self.alpha[0]*reward_keep[1]+self.alpha[1]*reward_keep[2]+self.alpha[2]*reward_keep[3]+self.alpha[3]*reward_keep[0]
-                switch = self.alpha[0]*reward_switch[1]+self.alpha[1]*reward_switch[2]+self.alpha[2]*reward_switch[3]+self.alpha[3]*reward_switch[0]
+                keep = [self.alpha[0]*reward_keep[1],self.alpha[1]*reward_keep[2]+self.alpha[2]*reward_keep[3]+self.alpha[3]*reward_keep[0]]
+                switch = [self.alpha[0]*reward_switch[1],self.alpha[1]*reward_switch[2]+self.alpha[2]*reward_switch[3]+self.alpha[3]*reward_switch[0]]
             elif current_phase == 4:
-                keep = self.alpha[0]*reward_keep[2]+self.alpha[1]*reward_keep[3]+self.alpha[2]*reward_keep[0]+self.alpha[3]*reward_keep[1]
-                switch = self.alpha[0]*reward_switch[2]+self.alpha[1]*reward_switch[3]+self.alpha[2]*reward_switch[0]+self.alpha[3]*reward_switch[1]
+                keep = [self.alpha[0]*reward_keep[2],self.alpha[1]*reward_keep[3]+self.alpha[2]*reward_keep[0]+self.alpha[3]*reward_keep[1]]
+                switch = [self.alpha[0]*reward_switch[2],self.alpha[1]*reward_switch[3]+self.alpha[2]*reward_switch[0]+self.alpha[3]*reward_switch[1]]
             else:
-                keep = self.alpha[0]*reward_keep[3]+self.alpha[1]*reward_keep[0]+self.alpha[2]*reward_keep[1]+self.alpha[3]*reward_keep[2]
-                switch = self.alpha[0]*reward_switch[3]+self.alpha[1]*reward_switch[0]+self.alpha[2]*reward_switch[1]+self.alpha[3]*reward_switch[2]
-            if keep > switch:
+                keep = [self.alpha[0]*reward_keep[3],self.alpha[1]*reward_keep[0]+self.alpha[2]*reward_keep[1]+self.alpha[3]*reward_keep[2]]
+                switch = [self.alpha[0]*reward_switch[3],self.alpha[1]*reward_switch[0]+self.alpha[2]*reward_switch[1]+self.alpha[3]*reward_switch[2]]
+            # print(keep, switch)
+            if keep[0] > 1:
+                return False
+            elif sum(keep) <= sum(switch):
                 return False
             else:
                 return True
