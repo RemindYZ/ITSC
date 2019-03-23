@@ -32,7 +32,9 @@ class SumoSim():
         ]
         self.cfg_file = cfg_file
         self.route_file = route_file
+        self.flow_param = 0.8
         self.generate_route_file(self.pns, self.pew, self.psn, self.pew, self.plt, self.prt)
+        
 
         if nogui:
             self.sumoBinary = checkBinary('sumo')
@@ -75,18 +77,18 @@ class SumoSim():
     def generate_route_file(self, pns, pew, psn, pwe, plt, prt):
         self.seed(40)
         num_time_step = 3600  # number of time steps
-        routes = [{'route': 'n2s', 'prob': pns},
-                  {'route': 'n2e', 'prob': pns*plt},
-                  {'route': 'n2w', 'prob': pns*prt},
-                  {'route': 'e2w', 'prob': pew},
-                  {'route': 'e2s', 'prob': pew*plt},
-                  {'route': 'e2n', 'prob': pew*prt},
-                  {'route': 's2n', 'prob': psn},
-                  {'route': 's2w', 'prob': psn*plt},
-                  {'route': 's2e', 'prob': psn*prt},
-                  {'route': 'w2e', 'prob': pwe},
-                  {'route': 'w2n', 'prob': pwe*plt},
-                  {'route': 'w2s', 'prob': pwe*prt}]
+        routes = [{'route': 'n2s', 'prob': pns*self.flow_param},
+                  {'route': 'n2e', 'prob': pns*plt*self.flow_param},
+                  {'route': 'n2w', 'prob': pns*prt*self.flow_param},
+                  {'route': 'e2w', 'prob': pew*self.flow_param},
+                  {'route': 'e2s', 'prob': pew*plt*self.flow_param},
+                  {'route': 'e2n', 'prob': pew*prt*self.flow_param},
+                  {'route': 's2n', 'prob': psn*self.flow_param},
+                  {'route': 's2w', 'prob': psn*plt*self.flow_param},
+                  {'route': 's2e', 'prob': psn*prt*self.flow_param},
+                  {'route': 'w2e', 'prob': pwe*self.flow_param},
+                  {'route': 'w2n', 'prob': pwe*plt*self.flow_param},
+                  {'route': 'w2s', 'prob': pwe*prt*self.flow_param}]
 
         head = ['<routes>',
                 '<vType id="stdSKVehicle" accel="2.6" decel="4.5" sigma="0.5" '
