@@ -32,7 +32,7 @@ class SumoSim():
         ]
         self.cfg_file = cfg_file
         self.route_file = route_file
-        self.flow_param = 0.8
+        self.flow_param = 1
         self.generate_route_file(self.pns, self.pew, self.psn, self.pew, self.plt, self.prt)
         
 
@@ -59,10 +59,10 @@ class SumoSim():
         self.n_lane = 3
         # self.margin = 14
         self.max_green_time = [20,15,35,20]
-        self.min_green_time = [11,6,23,11]
+        self.min_green_time = [11,6,22,11]
         self.alpha = [0.6,0.25,0.1,0.05]
         self.phase2road_lane_index = {0:[[3,4],[0,1]],2:[[3,4],[2]],4:[[1,2],[0,1]],6:[[1,2],[2]]}
-        self.interval_time = 17
+        self.interval_time = 25
         self.sat_flow_rate = 1600
         self.threshod_speed = 1
         # self.max_sim_time = 360000000
@@ -140,21 +140,21 @@ class SumoSim():
             Phase.append(current_phase)
             cx_res = traci.junction.getContextSubscriptionResults("0")
             # print("current:",current_phase)
-            # if step>=last_step and current_phase%2==0:
-            #     Message = self.get_message(cx_res)
-            #     Reward = self.get_reward(Message, current_phase)
-            #     Bool =self.get_action(Reward, current_phase)
+            if step>=last_step and current_phase%2==0:
+                Message = self.get_message(cx_res)
+                Reward = self.get_reward(Message, current_phase)
+                Bool =self.get_action(Reward, current_phase)
 
-            #     if Bool and step-last_step-3>=self.min_green_time[int(current_phase/2)]:
-            #         print(current_phase,"total time:",step-last_step-3)
-            #         traci.trafficlight.setPhase("0",(current_phase+1)%8)
-            #         last_step=step
-            #     elif step-last_step>=self.max_green_time[int(current_phase/2)]:
-            #         print(current_phase, "total time:",step-last_step-3)
-            #         traci.trafficlight.setPhase("0",(current_phase+1)%8)
-            #         last_step=step
-            #     else:
-            #         traci.trafficlight.setPhase("0",current_phase)
+                if Bool and step-last_step-3>=self.min_green_time[int(current_phase/2)]:
+                    print(current_phase,"total time:",step-last_step-3)
+                    traci.trafficlight.setPhase("0",(current_phase+1)%8)
+                    last_step=step
+                elif step-last_step>=self.max_green_time[int(current_phase/2)]:
+                    print(current_phase, "total time:",step-last_step-3)
+                    traci.trafficlight.setPhase("0",(current_phase+1)%8)
+                    last_step=step
+                else:
+                    traci.trafficlight.setPhase("0",current_phase)
 
 
 
